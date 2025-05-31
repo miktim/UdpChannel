@@ -1,0 +1,136 @@
+UdpChannel, MIT (c) 2025 miktim@mail.ru  
+
+Java SE 8+/Android 8+ UDP broadcast/unicast/multicast client and server  
+Based on the Java DatagramChannel class
+
+The UDP protocol does not guarantee datagram delivery, ordering, or duplicate protection.
+The maximum safe UDP payload size is ~508 bytes.  
+
+Note: don't forget to open the required UDP port in your firewall;
+
+The jar ./dist/udpchannel-... file was generated with debugging info using JDK1.8
+
+package org.miktim.udpchannel;
+
+Overview:
+
+  Class UdpChannel extends Thread implements Closeable, AutoCloseable;  
+
+    Constants:  
+      static final String VERSION = "1.0.0";  
+  
+Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
+
+    Constructors: 
+      The protocol family of the created channel matches the type of the remote address (ipv4/ipv6).
+      Channels are created with reuse enabled, loopback disabled, and one hop.
+      Channels binds to the remote port.
+
+      UdpChannel(InetSocketAddress remote, NetworkInterface intf) throws IOException;
+      UdpChannel(InetSocketAddress remote, String intfName) throws IOException;
+
+    Methods:
+      static boolean isAvailable(int port);
+        - checks whether the port is available.
+
+      DatagramChannel getChannel();
+      UdpChannel setChannel(ProtocolFamily pf)
+        - pf is one of the: StandardProtocolFamily.INET, StandardProtocolFamily.INET6, StandardProtocolFamily.UNIX (Android)
+        - the method closes the current channel, preserving the remote socket and interface
+      ProtocolFamily getProtocolFamily(); 
+      DatagramSocket getSocket();
+      InetSocketAddress getRemote();
+      NetworkInterface getInterface();
+      InetSocketAddress getLocal();
+        - returns socket address with interface address and remote port;
+        - selected interface address (ipv4/ipv6) depends on remote address
+
+      boolean isOpen(); 
+      boolean isReceiving();
+        - returns true if the channel receives datagrams
+      boolean isMulticast();
+        - returns true if the remote address is multicast
+      UdpChannel setBroadcast(boolean on) throws IOException;
+      boolean getBroadcast() throws IOException;
+        - returns true if the channel is broadcast
+      UdpChannel setReuseAddress(boolean enable) throws SocketException;
+        - enable/disable reuse of net socket
+      boolean getReuseAddress();
+        - enabled by default
+      boolean isConnected();
+      UdpChannel connect() throws IOException;
+        - connects to remote socket
+      UdpChannel disconnect() throws IOException;
+
+      UdpChannel setLoopbackMode(boolean disable) throws IOException;
+      boolean getLoopbackMode() throws SocketException;
+      UdpChannel setTimeToLive(int ttl) throws IOException;
+      int getTimeToLive() throws IOException;
+
+      MembershipKey joinGroup() throws IOException;
+        - joins to the remote address group via the intf interface;
+
+      MembershipKey joinGroup(InetAddress source) throws IOException;
+        - joins to the remote address group via the intf interface;
+        - the resulting membership key is source-specific.
+
+      int send(byte[] buf) throws IOException;
+        - sends datagram to remote inetAddr, port
+      int send(byte[] buf, int off, int len) throws IOException;
+        - sends datagram to remote inetAddr, port
+      void send(DatagramPacket dp) throws IOException;
+        - sends this datagram packet to its own address/port or,
+          if the packet address is null, to the remote address/port
+
+      UdpChannel setPayloadSize(int size); 
+        - sets the payload buffer length for receiving packets
+      int getPayloadSize();
+        - default: 1500 bytes
+
+      void receive(UdpSocket.Handler handler) throws IOException;
+        - calls handler.onStart, starts receiving datagrams
+
+      void close();
+        - [stops receiving, calls handler.onClose,] close channel
+
+    SocketHandler uses the DatagramSocket receive method 
+
+    Interface UdpChannel.SocketlHandler extends UdpChannel.Handler {
+      void onStart(UdpChannel uc);
+      void onError(UdpChannel uc, Exception e);
+      void onClose(UdpChannel uc); 
+        - called BEFORE closing the socket
+      void onPacket(UdpChannel uc, DatagramPacket dp); 
+    }
+    
+    ChannelHandler uses the DatagramChannel receive method
+    The channel CONNECTS to remote address before receiving
+
+    Interface UdpChannel.ChannelHandler extends UdpChannel.Handler {
+      void onStart(UdpChannel uc);
+      void onError(UdpChannel uc, Exception e);
+      void onClose(UdpChannel uc); 
+        - called BEFORE closing the socket
+      void onPacket(UdpChannel uc, byte[] data); 
+    }  
+
+    @Override  
+    String toString();  
+      - returns a string with channel info of the form:  
+       "INET UdpChannel remote: MCG /224.0.1.191:9099 bound to: /0.0.0.0:9099  
+        Options:  
+        SO_SNDBUF: 106496 SO_RCVBUF: 106496 SO_REUSEADDR: false SO_BROADCAST: true  
+        IP_TOS: 0 IP_MULTICAST_IF: eth1 IP_MULTICAST_TTL: 1 IP_MULTICAST_LOOP: false"  
+  
+      
+Helpful Links:  
+  
+  - DatagramChannel:  
+      https://docs.oracle.com/javase/8/docs/api/java/nio/channels/DatagramChannel.html  
+      https://docs.oracle.com/javase/8/docs/api/java/nio/channels/MulticastChannel.html  
+  
+  - IANA address and port registry:  
+      https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml  
+      https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml  
+      https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml  
+  
