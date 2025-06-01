@@ -27,7 +27,7 @@ import java.util.Arrays;
 
 public final class UdpChannel extends Thread implements Closeable, AutoCloseable {
 
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "1.0.1";
     private ProtocolFamily protocolFamily;
     private DatagramChannel channel;
     private InetSocketAddress remoteSocket;
@@ -45,12 +45,21 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
         return true;
     }
 
+    public static boolean seemsBroadcast(InetAddress addr) {
+        if (addr.isMulticastAddress()) {
+            return false;
+        }
+        byte[] b = addr.getAddress();
+        return b.length == 4 && (b[3] == (byte) 255);
+    }
+
     UdpChannel prepareChannel(ProtocolFamily pf, InetSocketAddress remote, NetworkInterface intf)
             throws IOException {
         protocolFamily = pf;
         remoteSocket = remote;
         ni = intf;
         channel = DatagramChannel.open(protocolFamily);
+        if (seemsBroadcast(remote.getAddress())) setBroadcast(true);
         setReuseAddress(true);
         setMulticastInterface(ni);
         bind();
