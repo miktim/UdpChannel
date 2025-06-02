@@ -1,4 +1,11 @@
+Issue(Q): UdpChannel/UdpSocket similar tests show different results (receiving)
+1.1.0
+  - added constructors with specified NetworkFamily;
+  - added methods isBound, bind;
+  - added listener thread;
+  - constructors create unbinded channels with broadcast on;
+  - send and receive methods bind an unbound channel to a remote port
 1.0.1
-  - added detection of broadcast addresses
+  - non-multicast IPv4 addresses ending in .255 are considered broadcast.
 1.0.0
   - created 2025-05-28

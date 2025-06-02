@@ -1,6 +1,6 @@
 /**
  * UdpChannel package, MIT (c) 2025 miktim@mail.ru
- * Manage UDP via DatagramChannel
+ * Manage UDP via DatagramChannel class
  *
  * Created 2025-05-28
  */
@@ -25,13 +25,13 @@ import java.nio.channels.MembershipKey;
 import java.nio.channels.MulticastChannel;
 import java.util.Arrays;
 
-public final class UdpChannel extends Thread implements Closeable, AutoCloseable {
+public final class UdpChannel implements Closeable, AutoCloseable {
 
-    public static final String VERSION = "1.0.1";
+    public static final String VERSION = "1.1.0";
     private ProtocolFamily protocolFamily;
     private DatagramChannel channel;
     private InetSocketAddress remoteSocket;
-    private NetworkInterface ni;
+//    private NetworkInterface ni;
 
     public static boolean isAvailable(int port) {
 // https://stackoverflow.com/questions/434718/sockets-discover-port-availability-using-java
@@ -53,41 +53,40 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
         return b.length == 4 && (b[3] == (byte) 255);
     }
 
-    UdpChannel prepareChannel(ProtocolFamily pf, InetSocketAddress remote, NetworkInterface intf)
+    public UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, NetworkInterface intf)
             throws IOException {
         protocolFamily = pf;
-        remoteSocket = remote;
-        ni = intf;
-        channel = DatagramChannel.open(protocolFamily);
-        if (seemsBroadcast(remote.getAddress())) setBroadcast(true);
+        remoteSocket = remoteSoc;
+        channel = protocolFamily == null ? DatagramChannel.open() : DatagramChannel.open(protocolFamily);
+        setMulticastInterface(intf);
+//        if (seemsBroadcast(remoteSocket.getAddress())) 
+        setBroadcast(true);
         setReuseAddress(true);
-        setMulticastInterface(ni);
-        bind();
-        return this;
+        setLoopbackMode(true);
     }
 
-    public UdpChannel(InetSocketAddress remote, NetworkInterface intf)
+    public UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, String intfName)
             throws IOException {
-        prepareChannel(remote.getAddress() instanceof Inet6Address
+        this(pf, remoteSoc, NetworkInterface.getByName(intfName));
+    }
+
+    public UdpChannel(InetSocketAddress remoteSoc, NetworkInterface intf)
+            throws IOException {
+        this(remoteSoc.getAddress() instanceof Inet6Address
                 ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET,
-                remote, intf);
+                remoteSoc, intf);
     }
 
-    public UdpChannel(InetSocketAddress remote, String intfName)
+    public UdpChannel(InetSocketAddress remoteSoc, String intfName)
             throws IOException {
-        this(remote, NetworkInterface.getByName(intfName));
+        this(remoteSoc, NetworkInterface.getByName(intfName));
     }
 
     public DatagramChannel getChannel() {
         return channel;
     }
 
-    public UdpChannel setChannel(ProtocolFamily pf) throws IOException {
-        this.channel.close();
-        return prepareChannel(pf, remoteSocket, ni);
-    }
-
-    ProtocolFamily getProtocolFamily() {
+    public ProtocolFamily getProtocolFamily() {
         return protocolFamily;
     }
 
@@ -95,13 +94,24 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
         return channel.socket();
     }
 
-    void bind() throws IOException {
-        if (!getSocket().isBound()) {
-            channel.bind(new InetSocketAddress(remoteSocket.getPort()));
+    public UdpChannel bind() throws IOException {
+        if (!isBound()) {
+            bind(new InetSocketAddress(remoteSocket.getPort()));
         }
+        return this;
     }
 
-    public InetSocketAddress getLocal() throws SocketException {
+    public UdpChannel bind(InetSocketAddress soc) throws IOException {
+        channel.bind(soc);
+        return this;
+    }
+
+    public boolean isBound() {
+        return getSocket().isBound();
+    }
+
+    public InetSocketAddress getLocal() throws IOException {
+        NetworkInterface ni = getMulticastInterface();
         if (ni == null) {
             return new InetSocketAddress(remoteSocket.getPort());
         }
@@ -115,16 +125,15 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
     }
 
     public MembershipKey joinGroup() throws IOException {
-//        setMulticastInterface(ni);
-        return channel.join(remoteSocket.getAddress(), ni);
+        return channel.join(remoteSocket.getAddress(), getMulticastInterface());
     }
 
     public MembershipKey joinGroup(InetAddress source) throws IOException {
-//        setMulticastInterface(ni);
-        return channel.join(remoteSocket.getAddress(), ni, source);
+        return channel.join(remoteSocket.getAddress(), getMulticastInterface(), source);
     }
 
     public int send(byte[] buf, int off, int len) throws IOException {
+        bind();
         return channel.send(ByteBuffer.wrap(buf, off, len), remoteSocket);
     }
 
@@ -133,9 +142,14 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
     }
 
     public void send(DatagramPacket dp) throws IOException {
-        if(dp.getAddress() == null) dp.setSocketAddress(remoteSocket);
+        bind();
+        if (dp.getAddress() == null) {
+            dp.setSocketAddress(remoteSocket);
+        }
         getSocket().send(dp);
     }
+
+
     public interface Handler {
 
         void onStart(UdpChannel uc);
@@ -172,53 +186,58 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
         return payloadSize;
     }
 
+    class ChannelListenr extends Thread {
+
+        UdpChannel ch;
+
+        ChannelListenr(UdpChannel channel) {
+            ch = channel;
+        }
+
+        @Override
+        public void run() {
+            ch.isRunning = true;
+            ch.handler.onStart(ch);
+            while (ch.isReceiving() && ch.channel.isOpen()) {
+                try {
+                    if (ch.handler instanceof ChannelHandler) {
+                        ByteBuffer buf = ByteBuffer.allocate(ch.payloadSize);
+                        int len = ch.channel.read(buf);
+                        ((ChannelHandler) ch.handler).onPacket(ch, Arrays.copyOf(buf.array(), len));
+                    } else {
+                        DatagramPacket dp
+                                = new DatagramPacket(new byte[ch.payloadSize], ch.payloadSize);
+                        ch.getSocket().receive(dp);
+                        ((SocketHandler) ch.handler).onPacket(ch, dp);
+                    }
+                } catch (java.net.SocketTimeoutException e) {
+                } catch (Exception e) {
+                    if (!isReceiving() || getSocket().isClosed()) { // !(isReceivimg() && channel.isOpen())
+                        break;
+                    }
+                    try {
+                        ch.handler.onError(ch, e);
+                        ch.close();
+                    } catch (Exception ignore) {
+                    }
+                }
+            }
+        }
+    }
+
     public void receive(UdpChannel.Handler handler) throws IOException {
         if (isReceiving()) {
             throw new IllegalStateException("Already receiving");
         }
-        if (handler instanceof ChannelHandler) {
-            connect();
-        }
-        this.handler = handler;
-        start();
-    }
-
-    @Override
-    public void start() {
         if (handler == null) {
             throw new NullPointerException("No handler");
         }
-        super.start();
-    }
-
-    @Override
-    public void run() {
-        isRunning = true;
-        handler.onStart(this);
-        while (isReceiving() && channel.isOpen()) {
-            try {
-                if (handler instanceof ChannelHandler) {
-                    ByteBuffer buf = ByteBuffer.allocate(payloadSize);
-                    int len = channel.read(buf);
-                    ((ChannelHandler) handler).onPacket(this, Arrays.copyOf(buf.array(), len));
-                } else {
-                    DatagramPacket dp
-                            = new DatagramPacket(new byte[payloadSize], payloadSize);
-                    getSocket().receive(dp);
-                    ((SocketHandler) handler).onPacket(this, dp);
-                }
-            } catch (java.net.SocketTimeoutException e) {
-            } catch (Exception e) {
-                if (!isReceiving() || getSocket().isClosed()) { // !(isReceivimg() && channel.isOpen())
-                    break;
-                }
-                try {
-                    handler.onError(this, e);
-//                    close();
-                } catch (Exception ignore) {
-                }
-            }
+        bind();
+        if (handler instanceof ChannelHandler && !isConnected()) {
+            connect();
         }
+        this.handler = handler;
+        (new ChannelListenr(this)).start();
     }
 
     @Override
@@ -243,19 +262,17 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
     public InetSocketAddress getRemote() {
         return remoteSocket;
     }
-
+/*
     public NetworkInterface getInterface() {
         return ni;
     }
-
+*/
     public NetworkInterface getMulticastInterface() throws IOException {
         return (NetworkInterface) channel.getOption(StandardSocketOptions.IP_MULTICAST_IF);
     }
 
-    UdpChannel setMulticastInterface(NetworkInterface intf) throws IOException {
-        if (intf != null) {
-            channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, intf);
-        }
+    public UdpChannel setMulticastInterface(NetworkInterface intf) throws IOException {
+        channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, intf);
         return this;
     }
 
@@ -289,8 +306,8 @@ public final class UdpChannel extends Thread implements Closeable, AutoCloseable
         return channel.getOption(StandardSocketOptions.SO_REUSEADDR);
     }
 
-    public UdpChannel setLoopbackMode(boolean on) throws IOException {
-        channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, on);
+    public UdpChannel setLoopbackMode(boolean disable) throws IOException {
+        channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, disable);
         return this;
     }
 

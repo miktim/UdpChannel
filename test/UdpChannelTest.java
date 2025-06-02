@@ -1,9 +1,9 @@
 /*
  * UdpChannelTest, MIT (c) 2025 miktim@mail.ru
- * Enable the UDP_PORT in your firewall
- * Linux: internal, external, public zones
+ * Autodetect network family, DatagramChannel sender, DatagramSocket receiver
+ *   Enable the UDP_PORT in your firewall
+ *   Linux: internal, external, public zones
  */
-//package udpchannel;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -72,10 +72,11 @@ public class UdpChannelTest {
 
     static void testChannel(UdpChannel uc, int count) throws IOException {
         log("\r\n" + uc.toString());
-        uc.receive(handler);
         received = 0;
         errors = 0;
         byte[] payload = new byte[308];
+        if(uc.isMulticast()) log(uc.joinGroup());
+        uc.receive(handler);
         for (sent = 0; sent < count; sent++) {
             try {
                 uc.send(payload, 0, payload.length);
@@ -233,8 +234,6 @@ public class UdpChannelTest {
         UdpChannel channel = (new UdpChannel(new InetSocketAddress(iam, PORT), INTF))
 //                .setBroadcast(true)
                 .setLoopbackMode(false);
-//        MembershipKey key = channel.joinGroup();
-//        log("\nMembershipKey " + key);
         testChannel(channel, 25);
         log(received > 0 ? "Ok" : "There is no one in the group");
 

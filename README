@@ -1,34 +1,41 @@
 UdpChannel class, MIT (c) 2025 miktim@mail.ru  
 
-Java SE 8+/Android 8+ UDP broadcast/unicast/multicast client and server  
-Based on the Java DatagramChannel class
+Java SE 7+/Android 8+ UDP broadcast/unicast/multicast client and server  
+Based on Java's DatagramChannel class, which supports anycast and source-specific multicast
 
 The UDP protocol does not guarantee datagram delivery, ordering, or duplicate protection.
 The maximum safe UDP payload size is ~508 bytes.  
 
 Note: don't forget to open the required UDP port in your firewall;
 
-The jar ./dist/udpchannel-... file was generated with debugging info using JDK1.8
+The jar ./dist/udpchannel-... file was generated with debugging info using JDK1.8 for target JRE1.7
 
 package org.miktim.udpchannel;
 
 Overview:
 
-  Class UdpChannel extends Thread implements Closeable, AutoCloseable;  
+  Class UdpChannel implements Closeable, AutoCloseable;  
 
     Constants:  
-      static final String VERSION = "1.0.1";  
+      static final String VERSION = "1.1.0";  
   
 Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
 
     Constructors: 
-      The protocol family of the created channel matches the type of the remote address (ipv4/ipv6).
-      Channels are created with reuse enabled, loopback disabled, and one hop.
+      Creates an unbinded channel with reuse enabled, loopback disabled and one hop.
       Non-multicast IPv4 addresses ending in .255 are considered broadcast.
-      Channels binds to the remote port.
+      
+      UdpChannel(InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
+      UdpChannel(InetSocketAddress remoteSoc, String intfName) throws IOException;
+        - the protocol family of the created channel matches the type of the remote address (ipv4/ipv6).
 
-      UdpChannel(InetSocketAddress remote, NetworkInterface intf) throws IOException;
-      UdpChannel(InetSocketAddress remote, String intfName) throws IOException;
+      UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
+      UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, String intfName) throws IOException;
+        - the protocol family is one of the: 
+            system default, if protocol family argument is null
+            StandardProtocolFamily.INET
+            StandardProtocolFamily.INET6
+            StandardProtocolFamily.UNIX (Android)
 
     Methods:
       static boolean isAvailable(int port);
@@ -37,20 +44,19 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
         - returns true if ipv4 address ends in .255
  
       DatagramChannel getChannel();
-      UdpChannel setChannel(ProtocolFamily family)
-        - family is one of the:  
-            StandardProtocolFamily.INET,
-            StandardProtocolFamily.INET6,
-            StandardProtocolFamily.UNIX (Android)
-        - the method closes the current channel, opens a new one,
-          keeping the remote socket and interface.
       ProtocolFamily getProtocolFamily(); 
       DatagramSocket getSocket();
       InetSocketAddress getRemote();
-      NetworkInterface getInterface();
       InetSocketAddress getLocal();
-        - returns socket address with interface address and remote port;
+        - returns socket address with interfaceAddr/remotePort;
         - selected interface address (ipv4/ipv6) depends on remote address
+      NetworkInterface getMulticastInterface();
+      UdpChannel setMulticastInterface(NetworkInterface intf);
+      boolean isBound();
+      UdpChannel bind() throws IOException;
+        - an unbound channel binds to a 0.0.0.0/remotePort;
+      UdpChannel bind(InetSocketAddress soc) throws IOException;
+        - binds channel to the specified socket
 
       boolean isOpen(); 
       boolean isMulticast();
@@ -73,18 +79,19 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
       int getTimeToLive() throws IOException;
 
       MembershipKey joinGroup() throws IOException;
-        - joins to the remote address group via the intf interface;
-
+        - joins to the remote address group via the channel interface;
       MembershipKey joinGroup(InetAddress source) throws IOException;
-        - joins to the remote address group via the intf interface;
+        - joins to the remote address group via the channel interface;
         - the resulting membership key is source-specific.
 
+All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remotePort);          
+
       int send(byte[] buf) throws IOException;
-        - sends datagram to remote inetAddr, port
+        - sends datagram to remote address/port
       int send(byte[] buf, int off, int len) throws IOException;
-        - sends datagram to remote inetAddr, port
+        - sends datagram to remote address/port
       void send(DatagramPacket dp) throws IOException;
-        - sends this datagram packet to its own address/port or,
+        - sends datagram packet to its own address/port or,
           if the packet address is null, to the remote address/port
 
       boolean isReceiving();
@@ -95,6 +102,7 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
         - default: 1500 bytes
 
       void receive(UdpSocket.Handler handler) throws IOException;
+        - for ChannelHandler, channel CONNECTS to remote socket;
         - calls handler.onStart, starts receiving datagrams
 
       void close();
@@ -111,7 +119,7 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
     }
     
     ChannelHandler uses the DatagramChannel receive method
-    The channel CONNECTS to remote address before receiving
+      - before receiving, an disconnected channel CONNECTS to remote socket
 
     Interface UdpChannel.ChannelHandler extends UdpChannel.Handler {
       void onStart(UdpChannel uc);
