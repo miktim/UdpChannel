@@ -1,4 +1,6 @@
 Issue(Q): UdpChannel/UdpSocket similar tests show different results (receiving)
+2.0.0
+  - changed channel handler, native send methods, tests
 1.1.0
   - added constructors with specified NetworkFamily;
   - added methods isBound, bind;

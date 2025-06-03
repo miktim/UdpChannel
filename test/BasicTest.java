@@ -17,10 +17,12 @@ import java.util.Enumeration;
 import org.miktim.udpchannel.UdpChannel;
 
 public class BasicTest {
+    boolean nativeReceiver = true; // true - DatagramChannel, false - DatagramSocket
+    boolean nativeSender = true;   // true - DatagramChannel, false - DatagramSocket
 
     static final int PORT = 9099;
     static final String INTF = "eth1"; // local interface name;
-
+    
     static final String MU_ADDRESS = "224.0.1.191"; // iana unassigned multicast
 //    static final String MC_ADDRESS = "224.0.0.1"; // iana All Systems on this Subnet
     static final String MC_ADDRESS = "FF09::114"; // iana private experiment
@@ -73,8 +75,10 @@ public class BasicTest {
         }
 
         @Override
-        public void onPacket(UdpChannel uc, byte[] data) {
-            log("onPacket: " + new String(data));
+        public void onPacket(UdpChannel uc, DatagramPacket dp) {
+//            log("onPacket: " + new String(data));
+            byte[] data = Arrays.copyOfRange(dp.getData(), dp.getOffset(), dp.getLength());
+            log(format("onPacket: %s %s", new String(data), dp.getSocketAddress()));
         }
 
         @Override
@@ -97,7 +101,7 @@ public class BasicTest {
         @Override
         public void onPacket(UdpChannel uc, DatagramPacket dp) {
             byte[] data = Arrays.copyOfRange(dp.getData(), dp.getOffset(), dp.getLength());
-            log("onPacket: " + new String(data));
+            log(format("onPacket: %s %s", new String(data), dp.getSocketAddress()));
         }
 
         @Override
@@ -118,6 +122,9 @@ public class BasicTest {
 
     void run() throws IOException, InterruptedException {
         log(format("UdpChannel %s basic test", UdpChannel.VERSION));
+        log(format("Receiver: %s Sender: %s",
+                nativeReceiver ? "native" : "socket",
+                nativeSender ? "native" : "socket"));
         if (!UdpChannel.isAvailable(PORT)) {
             log("Port unavailible: " + PORT);
             System.exit(1);
@@ -125,20 +132,29 @@ public class BasicTest {
         UdpChannel uc;
         for (InetSocketAddress remote : sockets) {
             uc = new UdpChannel(remote, INTF);
-            uc.bind();
+//            uc.bind();
             uc.setLoopbackMode(false);
             log("\n" + uc);
             if (uc.isMulticast()) {
                 log(uc.joinGroup());
             }
             try {
-                uc.receive(chHandler);
-                uc.send("Send/receive OK".getBytes());
+                uc.receive(nativeReceiver ? chHandler : scHandler);
+                byte[] msg = "Send/receive OK".getBytes();
+                sleep(100);
+                if(nativeSender) {
+                    uc.send(msg);
+                } else {
+                    DatagramPacket dp = new DatagramPacket(msg, msg.length);
+                    uc.send(dp);
+                }    
                 sleep(300);
+                
             } catch (IOException e) {
                 e.printStackTrace();
 //                log(uc.getRemote().getAddress()+" "+ e.getClass());
             }
+
             uc.close();
         }
         log("\nCompleted");

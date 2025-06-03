@@ -16,7 +16,7 @@ Overview:
   Class UdpChannel implements Closeable, AutoCloseable;  
 
     Constants:  
-      static final String VERSION = "1.1.0";  
+      static final String VERSION = "2.0.0";  
   
 Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
 
@@ -42,7 +42,8 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
         - returns true if ipv4 address ends in .255
  
       DatagramChannel getChannel();
-      ProtocolFamily getProtocolFamily(); 
+      ProtocolFamily getProtocolFamily();
+        - returns null for system default 
       DatagramSocket getSocket();
       InetSocketAddress getRemote();
       InetSocketAddress getLocal();
@@ -77,18 +78,23 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
       int getTimeToLive() throws IOException;
 
       MembershipKey joinGroup() throws IOException;
-        - joins to the remote address group via the channel interface;
+        - joins to the remote address group via the network interface;
       MembershipKey joinGroup(InetAddress source) throws IOException;
-        - joins to the remote address group via the channel interface;
+        - joins to the remote address group via the network interface;
         - the resulting membership key is source-specific.
 
 All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remotePort);          
 
       int send(byte[] buf) throws IOException;
+        - native sender
         - sends datagram to remote address/port
-      int send(byte[] buf, int off, int len) throws IOException;
-        - sends datagram to remote address/port
+        - returns the number of bytes sent
+      int send(byte[] buf, SocketAddress soc) throws IOException;
+        - native sender
+        - sends datagram to specified socket address
+        - returns the number of bytes sent
       void send(DatagramPacket dp) throws IOException;
+        - DatagramSocket sender;
         - sends datagram packet to its own address/port or,
           if the packet address is null, to the remote address/port
 
@@ -100,7 +106,6 @@ All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remo
         - default: 1500 bytes
 
       void receive(UdpSocket.Handler handler) throws IOException;
-        - for ChannelHandler, channel CONNECTS to remote socket;
         - calls handler.onStart, starts receiving datagrams
 
       void close();
@@ -117,14 +122,13 @@ All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remo
     }
     
     ChannelHandler uses the DatagramChannel receive method
-      - before receiving, an disconnected channel CONNECTS to remote socket
 
     Interface UdpChannel.ChannelHandler extends UdpChannel.Handler {
       void onStart(UdpChannel uc);
       void onError(UdpChannel uc, Exception e);
       void onClose(UdpChannel uc); 
         - called BEFORE closing the socket
-      void onPacket(UdpChannel uc, byte[] data); 
+      void onPacket(UdpChannel uc, DatagramPacket dp); 
     }  
 
     @Override  

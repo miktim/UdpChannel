@@ -18,16 +18,16 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.StandardSocketOptions;
 import java.net.ProtocolFamily;
+import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.MembershipKey;
 import java.nio.channels.MulticastChannel;
-import java.util.Arrays;
 
 public final class UdpChannel implements Closeable, AutoCloseable {
 
-    public static final String VERSION = "1.1.0";
+    public static final String VERSION = "2.0.0";
     private ProtocolFamily protocolFamily;
     private DatagramChannel channel;
     private InetSocketAddress remoteSocket;
@@ -132,13 +132,18 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return channel.join(remoteSocket.getAddress(), getNetworkInterface(), source);
     }
 
+    /*
     public int send(byte[] buf, int off, int len) throws IOException {
         bind();
         return channel.send(ByteBuffer.wrap(buf, off, len), remoteSocket);
     }
+     */
+    public int send(byte[] buf, SocketAddress soc) throws IOException {
+        return channel.send(ByteBuffer.wrap(buf), soc);
+    }
 
     public int send(byte[] buf) throws IOException {
-        return send(buf, 0, buf.length);
+        return send(buf, remoteSocket);
     }
 
     public void send(DatagramPacket dp) throws IOException {
@@ -149,7 +154,6 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         getSocket().send(dp);
     }
 
-
     public interface Handler {
 
         void onStart(UdpChannel uc);
@@ -157,16 +161,17 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         void onError(UdpChannel uc, Exception e);
 
         void onClose(UdpChannel uc); // called before closing datagram socket
+
+        void onPacket(UdpChannel uc, DatagramPacket dp);
     }
 
     public interface ChannelHandler extends Handler {
 
-        void onPacket(UdpChannel uc, byte[] data);
+//        void onPacket(UdpChannel uc, byte[] data);
     }
 
     public interface SocketHandler extends Handler {
 
-        void onPacket(UdpChannel uc, DatagramPacket dp);
     }
 
     private UdpChannel.Handler handler;
@@ -200,15 +205,24 @@ public final class UdpChannel implements Closeable, AutoCloseable {
             ch.handler.onStart(ch);
             while (ch.isReceiving() && ch.channel.isOpen()) {
                 try {
-                    if (ch.handler instanceof ChannelHandler) {
-                        ByteBuffer buf = ByteBuffer.allocate(ch.payloadSize);
-                        int len = ch.channel.read(buf);
-                        ((ChannelHandler) ch.handler).onPacket(ch, Arrays.copyOf(buf.array(), len));
-                    } else {
+                    if (ch.handler instanceof SocketHandler) {
                         DatagramPacket dp
                                 = new DatagramPacket(new byte[ch.payloadSize], ch.payloadSize);
                         ch.getSocket().receive(dp);
                         ((SocketHandler) ch.handler).onPacket(ch, dp);
+                    } else {    
+                        ByteBuffer buf = ByteBuffer.allocate(ch.payloadSize);
+//                        int len = ch.channel.read(buf);
+//                        ((ChannelHandler) ch.handler).onPacket(ch, Arrays.copyOf(buf.array(), len));
+                        SocketAddress soc = ch.getChannel().receive(buf);
+                        if (soc == null) {
+                            continue;
+                        }
+                        buf.flip(); // Prepare for reading
+                        byte[] data = new byte[buf.remaining()];
+                        buf.get(data);
+                        DatagramPacket dp = new DatagramPacket(data, data.length, soc);
+                        ((ChannelHandler) ch.handler).onPacket(ch, dp);
                     }
                 } catch (java.net.SocketTimeoutException e) {
                 } catch (Exception e) {
@@ -233,9 +247,9 @@ public final class UdpChannel implements Closeable, AutoCloseable {
             throw new NullPointerException("No handler");
         }
         bind();
-        if (handler instanceof ChannelHandler && !isConnected()) {
-            connect();
-        }
+//        if (handler instanceof ChannelHandler && !isConnected()) {
+//            connect();
+//        }
         this.handler = handler;
         (new ChannelListenr(this)).start();
     }

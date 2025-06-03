@@ -80,7 +80,7 @@ public class UdpChannelTest {
         uc.receive(handler);
         for (sent = 0; sent < count; sent++) {
             try {
-                uc.send(payload, 0, payload.length);
+                uc.send(payload);
                 //uc.sendPacket(payload);
                 log(String.format("snt: %d %s:%d",
                         payload.length,
@@ -141,7 +141,8 @@ public class UdpChannelTest {
         InetAddress iam = InetAddress.getByName(MULTICAST_ADDRESS);
         InetAddress iar = InetAddress.getByName(REMOTE_ADDRESS);
 
-        log(format("UdpChannel %s test.\n",UdpChannel.VERSION));
+        log(format("UdpChannel %s test.",UdpChannel.VERSION));
+        log("Receiver: socket Sender: native\n");
         log("UDP port: " + PORT);
         log("loopback: " + ial.toString());
         log("host: " + iah.toString());
@@ -239,6 +240,6 @@ public class UdpChannelTest {
         log(received > 0 ? "Ok" : "There is no one in the group");
 
 //        timer.cancel();
-        log("\nComplete");
+        log("\nCompleted");
     }
 }
