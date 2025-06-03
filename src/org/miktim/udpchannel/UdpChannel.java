@@ -58,7 +58,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         protocolFamily = pf;
         remoteSocket = remoteSoc;
         channel = protocolFamily == null ? DatagramChannel.open() : DatagramChannel.open(protocolFamily);
-        setMulticastInterface(intf);
+        setNetworkInterface(intf);
 //        if (seemsBroadcast(remoteSocket.getAddress())) 
         setBroadcast(true);
         setReuseAddress(true);
@@ -111,7 +111,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     }
 
     public InetSocketAddress getLocal() throws IOException {
-        NetworkInterface ni = getMulticastInterface();
+        NetworkInterface ni = getNetworkInterface();
         if (ni == null) {
             return new InetSocketAddress(remoteSocket.getPort());
         }
@@ -125,11 +125,11 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     }
 
     public MembershipKey joinGroup() throws IOException {
-        return channel.join(remoteSocket.getAddress(), getMulticastInterface());
+        return channel.join(remoteSocket.getAddress(), getNetworkInterface());
     }
 
     public MembershipKey joinGroup(InetAddress source) throws IOException {
-        return channel.join(remoteSocket.getAddress(), getMulticastInterface(), source);
+        return channel.join(remoteSocket.getAddress(), getNetworkInterface(), source);
     }
 
     public int send(byte[] buf, int off, int len) throws IOException {
@@ -248,12 +248,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
             handler = null;
         }
         try {
-//            disconnect(); // HANG thread!
-//            if (isMulticast()) {
             ((MulticastChannel) channel).close();
-//            } else {
-//                channel.close();
-//            }
         } catch (IOException ignore) {
 
         }
@@ -262,16 +257,12 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     public InetSocketAddress getRemote() {
         return remoteSocket;
     }
-/*
-    public NetworkInterface getInterface() {
-        return ni;
-    }
-*/
-    public NetworkInterface getMulticastInterface() throws IOException {
+
+    public NetworkInterface getNetworkInterface() throws IOException {
         return (NetworkInterface) channel.getOption(StandardSocketOptions.IP_MULTICAST_IF);
     }
 
-    public UdpChannel setMulticastInterface(NetworkInterface intf) throws IOException {
+    public UdpChannel setNetworkInterface(NetworkInterface intf) throws IOException {
         channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, intf);
         return this;
     }
@@ -386,7 +377,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
                     channel.getOption(StandardSocketOptions.SO_RCVBUF),
                     getReuseAddress(),
                     getBroadcast()));
-            NetworkInterface intf = getMulticastInterface();
+            NetworkInterface intf = getNetworkInterface();
             sb.append(String.format("IP_TOS: %d IP_MULTICAST_IF: %s IP_MULTICAST_TTL: %d IP_MULTICAST_LOOP: %b",
                     channel.getOption(StandardSocketOptions.IP_TOS),
                     intf != null ? intf.getDisplayName() : "null",

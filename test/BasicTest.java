@@ -134,7 +134,7 @@ public class BasicTest {
             try {
                 uc.receive(chHandler);
                 uc.send("Send/receive OK".getBytes());
-                sleep(200);
+                sleep(300);
             } catch (IOException e) {
                 e.printStackTrace();
 //                log(uc.getRemote().getAddress()+" "+ e.getClass());

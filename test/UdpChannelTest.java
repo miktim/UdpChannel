@@ -1,11 +1,12 @@
 /*
  * UdpChannelTest, MIT (c) 2025 miktim@mail.ru
- * Autodetect network family, DatagramChannel sender, DatagramSocket receiver
+ * Autodetect network protocol family, DatagramChannel sender, DatagramSocket receiver
  *   Enable the UDP_PORT in your firewall
  *   Linux: internal, external, public zones
  */
 
 import java.io.IOException;
+import static java.lang.String.format;
 import java.net.DatagramPacket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -112,7 +113,7 @@ public class UdpChannelTest {
                     packet.getLength(),
                     packet.getAddress(),
                     packet.getPort()));
-            if (packet.getAddress().equals(REMOTE_ADDRESS)) {
+            if (packet.getAddress().equals(REMOTE_ADDRESS)) { // echo host
                 try { // echo packet
                     uc.getSocket().send(packet);
                 } catch (IOException ex) {
@@ -140,7 +141,7 @@ public class UdpChannelTest {
         InetAddress iam = InetAddress.getByName(MULTICAST_ADDRESS);
         InetAddress iar = InetAddress.getByName(REMOTE_ADDRESS);
 
-        log("UdpChannel test.");
+        log(format("UdpChannel %s test.\n",UdpChannel.VERSION));
         log("UDP port: " + PORT);
         log("loopback: " + ial.toString());
         log("host: " + iah.toString());
@@ -238,6 +239,6 @@ public class UdpChannelTest {
         log(received > 0 ? "Ok" : "There is no one in the group");
 
 //        timer.cancel();
-        log("Complete");
+        log("\nComplete");
     }
 }

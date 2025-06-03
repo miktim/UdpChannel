@@ -1,12 +1,11 @@
-UdpChannel class, MIT (c) 2025 miktim@mail.ru  
-
-Java SE 7+/Android 8+ UDP broadcast/unicast/multicast client and server  
-Based on Java's DatagramChannel class, which supports anycast and source-specific multicast
-
+UdpChannel. Java SE 7+/Android 8+ UDP client and server, MIT (c) 2025 miktim@mail.ru  
+  
+Based on Java's DatagramChannel class, which supports anycast and source-specific multicast  
+  
+Notes:  
 The UDP protocol does not guarantee datagram delivery, ordering, or duplicate protection.
 The maximum safe UDP payload size is ~508 bytes.  
-
-Note: don't forget to open the required UDP port in your firewall;
+Don't forget to open the required UDP port in your firewall.
 
 The jar ./dist/udpchannel-... file was generated with debugging info using JDK1.8 for target JRE1.7
 
@@ -22,12 +21,11 @@ Overview:
 Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
 
     Constructors: 
-      Creates an unbinded channel with reuse enabled, loopback disabled and one hop.
-      Non-multicast IPv4 addresses ending in .255 are considered broadcast.
+      Creates an unbinded channel with reuse enabled, broadcast on, loopback disabled and one hop.
       
       UdpChannel(InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
       UdpChannel(InetSocketAddress remoteSoc, String intfName) throws IOException;
-        - the protocol family of the created channel matches the type of the remote address (ipv4/ipv6).
+        - autodetect of the protocol family of the created channel by the type of the remote address (ipv4/ipv6).
 
       UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
       UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, String intfName) throws IOException;
@@ -50,8 +48,8 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
       InetSocketAddress getLocal();
         - returns socket address with interfaceAddr/remotePort;
         - selected interface address (ipv4/ipv6) depends on remote address
-      NetworkInterface getMulticastInterface();
-      UdpChannel setMulticastInterface(NetworkInterface intf);
+      NetworkInterface getNetworkInterface();
+      UdpChannel setNetworkInterface(NetworkInterface intf);
       boolean isBound();
       UdpChannel bind() throws IOException;
         - an unbound channel binds to a 0.0.0.0/remotePort;
