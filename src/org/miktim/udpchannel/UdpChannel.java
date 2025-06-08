@@ -8,6 +8,7 @@ package org.miktim.udpchannel;
 
 import java.io.Closeable;
 import java.io.IOException;
+import static java.lang.Thread.sleep;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.Inet6Address;
@@ -24,25 +25,31 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.MembershipKey;
 import java.nio.channels.MulticastChannel;
+import java.nio.channels.SelectionKey;
+import java.util.Arrays;
 
 public final class UdpChannel implements Closeable, AutoCloseable {
 
-    public static final String VERSION = "2.0.0";
-    private ProtocolFamily protocolFamily;
+    public static final String VERSION = "2.0.2";
+    private String mode;
     private DatagramChannel channel;
     private InetSocketAddress remoteSocket;
-//    private NetworkInterface ni;
 
     public static boolean isAvailable(int port) {
 // https://stackoverflow.com/questions/434718/sockets-discover-port-availability-using-java
-        DatagramSocket soc;
-        try {
-            soc = new DatagramSocket(port);
-        } catch (SocketException e) {
-            return false;
+        try (DatagramChannel ch = DatagramChannel.open();) {
+            InetSocketAddress soc = new InetSocketAddress(InetAddress.getByName("255.255.255.255"), port);
+            ch.setOption(StandardSocketOptions.SO_BROADCAST, true);
+            ch.bind(new InetSocketAddress(port));
+            ch.send(ByteBuffer.allocate(10), soc);
+            sleep(200);
+            ch.configureBlocking(false);
+            if (ch.receive(ByteBuffer.allocate(10)) != null) {
+                return true;
+            }
+        } catch (Exception e) {
         }
-        soc.close();
-        return true;
+        return false;
     }
 
     public static boolean seemsBroadcast(InetAddress addr) {
@@ -53,41 +60,63 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return b.length == 4 && (b[3] == (byte) 255);
     }
 
-    public UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, NetworkInterface intf)
-            throws IOException {
-        protocolFamily = pf;
-        remoteSocket = remoteSoc;
-        channel = protocolFamily == null ? DatagramChannel.open() : DatagramChannel.open(protocolFamily);
-        setNetworkInterface(intf);
-//        if (seemsBroadcast(remoteSocket.getAddress())) 
-        setBroadcast(true);
-        setReuseAddress(true);
-        setLoopbackMode(true);
+    void channelByMode() throws IOException {
+        mode = mode.toUpperCase();
+        if (mode.equals("AUTO")) {
+            channel = DatagramChannel.open(
+                    remoteSocket.getAddress() instanceof Inet6Address
+                    ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET);
+        } else if (mode.equals("DEFAULT")) {
+            channel = DatagramChannel.open();
+        } else {
+            for (ProtocolFamily pf : StandardProtocolFamily.values()) {
+                if (pf.name().toUpperCase().equals(mode)) {
+                    channel = DatagramChannel.open(pf);
+                    return;
+                }
+            }
+            throw new IllegalArgumentException();
+        }
     }
 
-    public UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, String intfName)
+    public UdpChannel(String mode, InetSocketAddress remoteSoc, NetworkInterface intf)
             throws IOException {
-        this(pf, remoteSoc, NetworkInterface.getByName(intfName));
+        this.mode = mode;
+        remoteSocket = remoteSoc;
+        channelByMode();
+        if (intf != null) {
+            setNetworkInterface(intf);
+        }
+
+        setBroadcast(true);
+        setReuseAddress(true);
+        setMulticastLoop(true); // disable multicast loopback
+        if (isMulticast()) {
+            bind();
+        }
+    }
+
+    public UdpChannel(String mode, InetAddress remoteAddr, int remotePort, String intfName)
+            throws IOException {
+        this(mode, new InetSocketAddress(remoteAddr, remotePort), intfName == null ? null : NetworkInterface.getByName(intfName));
     }
 
     public UdpChannel(InetSocketAddress remoteSoc, NetworkInterface intf)
             throws IOException {
-        this(remoteSoc.getAddress() instanceof Inet6Address
-                ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET,
-                remoteSoc, intf);
+        this("AUTO", remoteSoc, intf);
     }
 
-    public UdpChannel(InetSocketAddress remoteSoc, String intfName)
+    public UdpChannel(InetAddress remoteAddr, int remotePort, String intfName)
             throws IOException {
-        this(remoteSoc, NetworkInterface.getByName(intfName));
+        this("AUTO", remoteAddr, remotePort, intfName);
     }
 
     public DatagramChannel getChannel() {
         return channel;
     }
 
-    public ProtocolFamily getProtocolFamily() {
-        return protocolFamily;
+    public String getMode() {
+        return mode;
     }
 
     public DatagramSocket getSocket() {
@@ -106,8 +135,16 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return this;
     }
 
-    public boolean isBound() {
-        return getSocket().isBound();
+    public boolean isBound() throws IOException {
+        return channel.getLocalAddress() != null;
+    }
+
+    public boolean validWrite() {
+        return (channel.validOps() & SelectionKey.OP_WRITE) > 0;
+    }
+
+    public boolean validRead() {
+        return (channel.validOps() & SelectionKey.OP_READ) > 0;
     }
 
     public InetSocketAddress getLocal() throws IOException {
@@ -138,8 +175,11 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return channel.send(ByteBuffer.wrap(buf, off, len), remoteSocket);
     }
      */
-    public int send(byte[] buf, SocketAddress soc) throws IOException {
-        return channel.send(ByteBuffer.wrap(buf), soc);
+    public int send(byte[] buf, SocketAddress target) throws IOException {
+        if (!isBound()) {
+            bind();
+        }
+        return channel.send(ByteBuffer.wrap(buf), target);
     }
 
     public int send(byte[] buf) throws IOException {
@@ -147,6 +187,15 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     }
 
     public void send(DatagramPacket dp) throws IOException {
+        bind();
+        if (dp.getAddress() == null) {
+            dp.setSocketAddress(remoteSocket);
+        }
+        send(Arrays.copyOfRange(dp.getData(), dp.getOffset(), dp.getLength()),
+                dp.getSocketAddress());
+    }
+
+    public void socketSend(DatagramPacket dp) throws IOException {
         bind();
         if (dp.getAddress() == null) {
             dp.setSocketAddress(remoteSocket);
@@ -160,14 +209,13 @@ public final class UdpChannel implements Closeable, AutoCloseable {
 
         void onError(UdpChannel uc, Exception e);
 
-        void onClose(UdpChannel uc); // called before closing datagram socket
+        void onClose(UdpChannel uc); // called before closing datagram channel
 
         void onPacket(UdpChannel uc, DatagramPacket dp);
     }
 
     public interface ChannelHandler extends Handler {
 
-//        void onPacket(UdpChannel uc, byte[] data);
     }
 
     public interface SocketHandler extends Handler {
@@ -193,28 +241,28 @@ public final class UdpChannel implements Closeable, AutoCloseable {
 
     class ChannelListenr extends Thread {
 
-        UdpChannel ch;
+        UdpChannel uch;
 
-        ChannelListenr(UdpChannel channel) {
-            ch = channel;
+        ChannelListenr(UdpChannel udpChannel) {
+            uch = udpChannel;
         }
 
         @Override
         public void run() {
-            ch.isRunning = true;
-            ch.handler.onStart(ch);
-            while (ch.isReceiving() && ch.channel.isOpen()) {
+            uch.isRunning = true;
+            uch.handler.onStart(uch);
+            while (uch.isReceiving() && uch.channel.isOpen()) {
                 try {
-                    if (ch.handler instanceof SocketHandler) {
+                    if (uch.handler instanceof SocketHandler) {
                         DatagramPacket dp
-                                = new DatagramPacket(new byte[ch.payloadSize], ch.payloadSize);
-                        ch.getSocket().receive(dp);
-                        ((SocketHandler) ch.handler).onPacket(ch, dp);
-                    } else {    
-                        ByteBuffer buf = ByteBuffer.allocate(ch.payloadSize);
+                                = new DatagramPacket(new byte[uch.payloadSize], uch.payloadSize);
+                        uch.getSocket().receive(dp);
+                        ((SocketHandler) uch.handler).onPacket(uch, dp);
+                    } else {
+                        ByteBuffer buf = ByteBuffer.allocate(uch.payloadSize);
 //                        int len = ch.channel.read(buf);
 //                        ((ChannelHandler) ch.handler).onPacket(ch, Arrays.copyOf(buf.array(), len));
-                        SocketAddress soc = ch.getChannel().receive(buf);
+                        SocketAddress soc = uch.channel.receive(buf);
                         if (soc == null) {
                             continue;
                         }
@@ -222,16 +270,16 @@ public final class UdpChannel implements Closeable, AutoCloseable {
                         byte[] data = new byte[buf.remaining()];
                         buf.get(data);
                         DatagramPacket dp = new DatagramPacket(data, data.length, soc);
-                        ((ChannelHandler) ch.handler).onPacket(ch, dp);
+                        ((Handler) uch.handler).onPacket(uch, dp);
                     }
                 } catch (java.net.SocketTimeoutException e) {
                 } catch (Exception e) {
-                    if (!isReceiving() || getSocket().isClosed()) { // !(isReceivimg() && channel.isOpen())
+                    if (!isReceiving() || !uch.channel.isOpen()) { // !(isReceivimg() && channel.isOpen())
                         break;
                     }
                     try {
-                        ch.handler.onError(ch, e);
-                        ch.close();
+                        uch.handler.onError(uch, e);
+                        uch.close();
                     } catch (Exception ignore) {
                     }
                 }
@@ -311,12 +359,12 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return channel.getOption(StandardSocketOptions.SO_REUSEADDR);
     }
 
-    public UdpChannel setLoopbackMode(boolean disable) throws IOException {
-        channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, disable);
+    public UdpChannel setMulticastLoop(boolean enable) throws IOException {
+        channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, enable);
         return this;
     }
 
-    public boolean getLoopbackMode() throws IOException {
+    public boolean getMulticastLoop() throws IOException {
         return channel.getOption(StandardSocketOptions.IP_MULTICAST_LOOP);
     }
 
@@ -381,7 +429,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         DatagramChannel channel = getChannel();
-        sb.append(protocolFamily == null ? "Default" : protocolFamily.name());
+        sb.append(mode);
         try {
             sb.append(String.format(" UdpChannel remote: %s %s bound to: %s\n\r",
                     addressType(remoteSocket.getAddress()), getRemote(), getChannel().getLocalAddress()));
@@ -396,7 +444,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
                     channel.getOption(StandardSocketOptions.IP_TOS),
                     intf != null ? intf.getDisplayName() : "null",
                     getTimeToLive(),
-                    getLoopbackMode()));
+                    getMulticastLoop()));
         } catch (IOException e) {
             sb.append(e.getClass().getName());
         }

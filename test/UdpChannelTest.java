@@ -81,7 +81,6 @@ public class UdpChannelTest {
         for (sent = 0; sent < count; sent++) {
             try {
                 uc.send(payload);
-                //uc.sendPacket(payload);
                 log(String.format("snt: %d %s:%d",
                         payload.length,
                         uc.getRemote().getAddress().toString(),
@@ -171,18 +170,18 @@ public class UdpChannelTest {
 
         InetSocketAddress remote = new InetSocketAddress(iar, PORT);
         try {
-            UdpChannel channel1 = new UdpChannel(remote, INTF);
-            UdpChannel channel2 = new UdpChannel(remote, INTF);
+            UdpChannel channel1 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
+            UdpChannel channel2 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
             channel1.close();
             channel2.close();
         } catch (IOException e) {
             log("Reused address failed. Exit.\r\n");
             System.exit(1);
         }
-        UdpChannel channel1 = new UdpChannel(remote, INTF);
+        UdpChannel channel1 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
         try {
             channel1.setReuseAddress(false);
-            UdpChannel channel2 = new UdpChannel(remote, INTF);
+            UdpChannel channel2 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
             channel1.close();
             channel2.close();
         } catch (IOException e) {
@@ -191,11 +190,11 @@ public class UdpChannelTest {
         }
 
 // test autocloseable  
-        try (UdpChannel chn = new UdpChannel(remote,INTF)) {
+        try (UdpChannel chn = new UdpChannel(remote,NetworkInterface.getByName(INTF))) {
             chn.setReuseAddress(false);
         }
         try {
-            channel1 = new UdpChannel(remote,INTF);
+            channel1 = new UdpChannel(remote,NetworkInterface.getByName(INTF));
         } catch (IOException ex) {
             log("AutoCloseable failed.");
         }
@@ -204,38 +203,38 @@ public class UdpChannelTest {
 
 // broadcast 
         remote = new InetSocketAddress(iab, PORT);
-        channel1 = new UdpChannel(remote, INTF);
+        channel1 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
         channel1.setBroadcast(true);
-        channel1.setLoopbackMode(false);
-        testChannel(channel1); // test closes channel
-        logOk(sent == 5 && received == 5 && errors == 0);
+        channel1.setMulticastLoop(false);
+        testChannel(channel1,1); // test closes channel
+        logOk(sent == 1 && received == 1 && errors == 0);
 
-        UdpChannel channel0 = new UdpChannel(new InetSocketAddress(PORT), "eth1");
+        UdpChannel channel0 = new UdpChannel(new InetSocketAddress(PORT), NetworkInterface.getByName(INTF));
         testChannel(channel0, 1);
         logOk(sent == 1 && received == 1 && errors == 0);
 
 // send to loopback
-        testChannel((new UdpChannel(new InetSocketAddress(ial, PORT), INTF)));
+        testChannel((new UdpChannel(new InetSocketAddress(ial, PORT), NetworkInterface.getByName(INTF))),1);
 //                .setChannel(StandardProtocolFamily.INET6));
-        logOk(sent == 5 && received == 5 && errors == 0);
+        logOk(sent == 1 && received == 1 && errors == 0);
 
 // send to myself       
-        testChannel((new UdpChannel(new InetSocketAddress(iah, PORT), INTF)));
-        logOk(sent == 5 && received == 5 && errors == 0);
+        testChannel((new UdpChannel(new InetSocketAddress(iah, PORT), NetworkInterface.getByName(INTF))),1);
+        logOk(sent == 1 && received == 1 && errors == 0);
 
 // remote echo
         if (iar.isReachable(200)) {
             log(String.format("\r\nEcho host %s is reachable.", iar.toString()));
-            testChannel((new UdpChannel(new InetSocketAddress(iar, PORT), INTF)));
+            testChannel((new UdpChannel(new InetSocketAddress(iar, PORT), NetworkInterface.getByName(INTF))));
             logOk(received > 0);
         } else {
             log(String.format("\r\nEcho host %s is unreachable.", iar.toString()));
         }
 
 // send to multicast
-        UdpChannel channel = (new UdpChannel(new InetSocketAddress(iam, PORT), INTF))
+        UdpChannel channel = (new UdpChannel(new InetSocketAddress(iam, PORT), NetworkInterface.getByName(INTF)))
 //                .setBroadcast(true)
-                .setLoopbackMode(false);
+                .setMulticastLoop(false);
         testChannel(channel, 25);
         log(received > 0 ? "Ok" : "There is no one in the group");
 

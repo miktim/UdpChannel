@@ -47,7 +47,7 @@ public class BasicTest {
         hostSoc = new InetSocketAddress(hostAddr, PORT);
         wildSoc = new InetSocketAddress(PORT);
 
-        sockets = new InetSocketAddress[]{loopSoc, hostSoc, bcastSoc, mcastSoc, freemcSoc, wildSoc};
+        sockets = new InetSocketAddress[]{loopSoc, hostSoc, bcastSoc, wildSoc, mcastSoc, freemcSoc};
     }
 
     void log(Object msg) {
@@ -68,7 +68,7 @@ public class BasicTest {
         return null;
     }
 
-    UdpChannel.ChannelHandler chHandler = new UdpChannel.ChannelHandler() {
+    UdpChannel.Handler chHandler = new UdpChannel.Handler() {
         @Override
         public void onStart(UdpChannel uc) {
             log("onStart");
@@ -126,27 +126,29 @@ public class BasicTest {
                 nativeReceiver ? "native" : "socket",
                 nativeSender ? "native" : "socket"));
         if (!UdpChannel.isAvailable(PORT)) {
-            log("Port unavailible: " + PORT);
+            log("Port unavailable: " + PORT);
             System.exit(1);
         }
         UdpChannel uc;
+
         for (InetSocketAddress remote : sockets) {
-            uc = new UdpChannel(remote, INTF);
-//            uc.bind();
-            uc.setLoopbackMode(false);
+            uc = new UdpChannel("AUTO",remote, NetworkInterface.getByName(INTF));
+            uc.bind();
+            uc.setMulticastLoop(true); // enable loopback
             log("\n" + uc);
             if (uc.isMulticast()) {
                 log(uc.joinGroup());
             }
+            log(format("Valid read: %b write: %b", uc.validRead(), uc.validWrite()));
             try {
                 uc.receive(nativeReceiver ? chHandler : scHandler);
                 byte[] msg = "Send/receive OK".getBytes();
-                sleep(100);
+                sleep(200);
                 if(nativeSender) {
                     uc.send(msg);
                 } else {
                     DatagramPacket dp = new DatagramPacket(msg, msg.length);
-                    uc.send(dp);
+                    uc.socketSend(dp);
                 }    
                 sleep(300);
                 

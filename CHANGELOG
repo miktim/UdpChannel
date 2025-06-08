@@ -1,4 +1,8 @@
-Issue(Q): UdpChannel/UdpSocket similar tests show different results (receiving)
+2.0.2
+  - resolved Issue(Q): not receive multicast loopback
+    unlike DatagramSocket, "true" enables multicast loopback
+  - changed constructors
+  - fixed isAvailiable method
 2.0.0
   - changed channel handler, native send methods, tests
 1.1.0

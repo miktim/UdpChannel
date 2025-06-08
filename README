@@ -1,6 +1,6 @@
 UdpChannel. Java SE 7+/Android 8+ UDP client and server, MIT (c) 2025 miktim@mail.ru  
   
-Based on Java's DatagramChannel class, which supports anycast and source-specific multicast  
+Based on Java's DatagramChannel class, which supports source-specific multicast  
   
 Notes:  
 The UDP protocol does not guarantee datagram delivery, ordering, or duplicate protection.
@@ -16,24 +16,25 @@ Overview:
   Class UdpChannel implements Closeable, AutoCloseable;  
 
     Constants:  
-      static final String VERSION = "2.0.0";  
+      static final String VERSION = "2.0.2";  
   
 Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
 
     Constructors: 
       Creates an unbinded channel with reuse enabled, broadcast on, loopback disabled and one hop.
+
+      UdpChannel(String mode, InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
+      UdpChannel(String mode, InetSocketAddress remoteSoc, String intfName) throws IOException;
+        - the mode is one of the:
+            "AUTO" : autodetection by remote address type (ipv4/ipv6)
+            "DEFAULT" : system default
+            "INET" : StandardProtocolFamily.INET
+            "INET6" : StandardProtocolFamily.INET6
+            "UNIX" : StandardProtocolFamily.UNIX (Android)
       
       UdpChannel(InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
       UdpChannel(InetSocketAddress remoteSoc, String intfName) throws IOException;
-        - autodetect of the protocol family of the created channel by the type of the remote address (ipv4/ipv6).
-
-      UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, NetworkInterface intf) throws IOException;
-      UdpChannel(ProtocolFamily pf, InetSocketAddress remoteSoc, String intfName) throws IOException;
-        - the protocol family is one of the: 
-            system default, if protocol family argument is null
-            StandardProtocolFamily.INET
-            StandardProtocolFamily.INET6
-            StandardProtocolFamily.UNIX (Android)
+        - autodetection of the protocol family of the created channel by the type of the remote address (ipv4/ipv6).
 
     Methods:
       static boolean isAvailable(int port);
@@ -72,8 +73,9 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
         - connects to remote socket
       UdpChannel disconnect() throws IOException;
 
-      UdpChannel setLoopbackMode(boolean disable) throws IOException;
-      boolean getLoopbackMode() throws SocketException;
+      UdpChannel setMulticastLoop(boolean enable) throws IOException;
+        - true enables loopback
+      boolean getMulticastLoop() throws SocketException;
       UdpChannel setTimeToLive(int ttl) throws IOException;
       int getTimeToLive() throws IOException;
 
@@ -86,15 +88,12 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
 All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remotePort);          
 
       int send(byte[] buf) throws IOException;
-        - native sender
         - sends datagram to remote address/port
         - returns the number of bytes sent
-      int send(byte[] buf, SocketAddress soc) throws IOException;
-        - native sender
-        - sends datagram to specified socket address
+      int send(byte[] buf, SocketAddress target) throws IOException;
+        - sends datagram to specified target socket
         - returns the number of bytes sent
       void send(DatagramPacket dp) throws IOException;
-        - DatagramSocket sender;
         - sends datagram packet to its own address/port or,
           if the packet address is null, to the remote address/port
 
@@ -111,19 +110,7 @@ All send/receive methods binds unbouded channel to the remote port (0.0.0.0/remo
       void close();
         - [stops receiving, calls handler.onClose,] close channel
 
-    SocketHandler uses the DatagramSocket receive method 
-
-    Interface UdpChannel.SocketlHandler extends UdpChannel.Handler {
-      void onStart(UdpChannel uc);
-      void onError(UdpChannel uc, Exception e);
-      void onClose(UdpChannel uc); 
-        - called BEFORE closing the socket
-      void onPacket(UdpChannel uc, DatagramPacket dp); 
-    }
-    
-    ChannelHandler uses the DatagramChannel receive method
-
-    Interface UdpChannel.ChannelHandler extends UdpChannel.Handler {
+    Interface UdpChannel.Handler
       void onStart(UdpChannel uc);
       void onError(UdpChannel uc, Exception e);
       void onClose(UdpChannel uc); 
