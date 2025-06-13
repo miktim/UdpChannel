@@ -43,8 +43,8 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
         - returns true if ipv4 address ends in .255
  
       DatagramChannel getChannel();
-      ProtocolFamily getProtocolFamily();
-        - returns null for system default 
+      String getMode();
+        - returns channel creation mode 
       DatagramSocket getSocket();
       InetSocketAddress getRemote();
       InetSocketAddress getLocal();
