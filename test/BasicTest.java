@@ -134,7 +134,7 @@ public class BasicTest {
         for (InetSocketAddress remote : sockets) {
             uc = new UdpChannel("AUTO",remote, NetworkInterface.getByName(INTF));
             uc.bind();
-            uc.setMulticastLoop(true); // enable loopback
+            uc.setLoopback(true); // enable loopback
             log("\n" + uc);
             if (uc.isMulticast()) {
                 log(uc.joinGroup());

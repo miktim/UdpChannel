@@ -1,3 +1,5 @@
+2.1.0
+  - added forgotten buffer size setters/getters
 2.0.2
   - resolved Issue(Q): not receive multicast loopback
     unlike DatagramSocket, "true" enables multicast loopback

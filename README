@@ -16,7 +16,7 @@ Overview:
   Class UdpChannel implements Closeable, AutoCloseable;  
 
     Constants:  
-      static final String VERSION = "2.0.2";  
+      static final String VERSION = "2.1.0";  
   
 Further in the text: "remote address", "remote port", "remote socket" means "remote" parameter of the constructor. 
 
@@ -50,34 +50,39 @@ Further in the text: "remote address", "remote port", "remote socket" means "rem
       InetSocketAddress getLocal();
         - returns socket address with interfaceAddr/remotePort;
         - selected interface address (ipv4/ipv6) depends on remote address
-      NetworkInterface getNetworkInterface();
-      UdpChannel setNetworkInterface(NetworkInterface intf);
-      boolean isBound();
-      UdpChannel bind() throws IOException;
-        - an unbound channel binds to a 0.0.0.0/remotePort;
-      UdpChannel bind(InetSocketAddress soc) throws IOException;
-        - binds channel to the specified socket
-
       boolean isOpen(); 
       boolean isMulticast();
         - returns true if the remote address is multicast
-      UdpChannel setBroadcast(boolean on) throws IOException;
-      boolean getBroadcast() throws IOException;
-        - returns true if the channel is broadcast
-      UdpChannel setReuseAddress(boolean enable) throws SocketException;
-        - enable/disable reuse of net socket
-      boolean getReuseAddress();
-        - enabled by default
+
+      boolean isBound();
+      UdpChannel bind() throws IOException;
+        - an unbound channel binds to the remotePort;
+      UdpChannel bind(InetSocketAddress soc) throws IOException;
+        - binds channel to the specified socket
       boolean isConnected();
       UdpChannel connect() throws IOException;
         - connects to remote socket
       UdpChannel disconnect() throws IOException;
 
-      UdpChannel setMulticastLoop(boolean enable) throws IOException;
-        - true enables loopback
-      boolean getMulticastLoop() throws SocketException;
+      UdpChannel setReuseAddress(boolean enable) throws SocketException;
+        - enable/disable reuse of net channel
+      boolean getReuseAddress();
+        - enabled by default
+      UdpChannel setBroadcast(boolean on) throws IOException;
+      boolean getBroadcast() throws IOException;
+        - returns true if the channel is broadcast
+      UdpChannel setReceiveBufferSize(int size) throws IOException;
+      int getReceiveBufferSize() throws IOException;
+      UdpChannel setSendBufferSize(int size) throws IOException;
+      int getSendBufferSize() throws IOException;
+
+      UdpChannel setLoopbackMode(boolean disable) throws IOException;
+        - false enables loopback
+      boolean getLoopbackMode() throws SocketException;
       UdpChannel setTimeToLive(int ttl) throws IOException;
       int getTimeToLive() throws IOException;
+      NetworkInterface getNetworkInterface();
+      UdpChannel setNetworkInterface(NetworkInterface intf);
 
       MembershipKey joinGroup() throws IOException;
         - joins to the remote address group via the network interface;

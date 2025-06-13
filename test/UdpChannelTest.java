@@ -205,7 +205,7 @@ public class UdpChannelTest {
         remote = new InetSocketAddress(iab, PORT);
         channel1 = new UdpChannel(remote, NetworkInterface.getByName(INTF));
         channel1.setBroadcast(true);
-        channel1.setMulticastLoop(false);
+        channel1.setLoopback(false);
         testChannel(channel1,1); // test closes channel
         logOk(sent == 1 && received == 1 && errors == 0);
 
@@ -234,7 +234,7 @@ public class UdpChannelTest {
 // send to multicast
         UdpChannel channel = (new UdpChannel(new InetSocketAddress(iam, PORT), NetworkInterface.getByName(INTF)))
 //                .setBroadcast(true)
-                .setMulticastLoop(false);
+                .setLoopback(false);
         testChannel(channel, 25);
         log(received > 0 ? "Ok" : "There is no one in the group");
 

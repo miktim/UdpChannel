@@ -30,7 +30,7 @@ import java.util.Arrays;
 
 public final class UdpChannel implements Closeable, AutoCloseable {
 
-    public static final String VERSION = "2.0.2";
+    public static final String VERSION = "2.1.0";
     private String mode;
     private DatagramChannel channel;
     private InetSocketAddress remoteSocket;
@@ -90,7 +90,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
 
         setBroadcast(true);
         setReuseAddress(true);
-        setMulticastLoop(true); // disable multicast loopback
+        setLoopback(true); // disable multicast loopback
         if (isMulticast()) {
             bind();
         }
@@ -320,15 +320,6 @@ public final class UdpChannel implements Closeable, AutoCloseable {
         return remoteSocket;
     }
 
-    public NetworkInterface getNetworkInterface() throws IOException {
-        return (NetworkInterface) channel.getOption(StandardSocketOptions.IP_MULTICAST_IF);
-    }
-
-    public UdpChannel setNetworkInterface(NetworkInterface intf) throws IOException {
-        channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, intf);
-        return this;
-    }
-
     public final boolean isMulticast() throws IOException {
         return remoteSocket.getAddress().isMulticastAddress();
     }
@@ -358,16 +349,33 @@ public final class UdpChannel implements Closeable, AutoCloseable {
     public boolean getReuseAddress() throws IOException {
         return channel.getOption(StandardSocketOptions.SO_REUSEADDR);
     }
-
-    public UdpChannel setMulticastLoop(boolean enable) throws IOException {
+    public int getReceiveBufferSize() throws IOException {
+       return channel.getOption(StandardSocketOptions.SO_RCVBUF); 
+    }
+    public UdpChannel setReceiveBufferSize(int size) throws IOException {
+        channel.setOption(StandardSocketOptions.SO_RCVBUF, size);
+        return this;
+    }
+    public int getSendBufferSize() throws IOException {
+       return channel.getOption(StandardSocketOptions.SO_SNDBUF); 
+    }
+    public UdpChannel setSendBufferSize(int size) throws IOException {
+        channel.setOption(StandardSocketOptions.SO_SNDBUF, size);
+        return this;
+    }
+    public UdpChannel setLoopback(boolean enable) throws IOException {
         channel.setOption(StandardSocketOptions.IP_MULTICAST_LOOP, enable);
         return this;
     }
-
-    public boolean getMulticastLoop() throws IOException {
+    public boolean getLoopback() throws IOException {
         return channel.getOption(StandardSocketOptions.IP_MULTICAST_LOOP);
     }
-
+    public UdpChannel setLoopbackMode(boolean disable) throws IOException {
+        return setLoopback(!disable);
+    }
+    public boolean getLoopbackMode() throws IOException {
+        return !getLoopback();
+    }
     public UdpChannel setTimeToLive(int ttl) throws IOException {
         channel.setOption(StandardSocketOptions.IP_MULTICAST_TTL, ttl);
         return this;
@@ -375,6 +383,15 @@ public final class UdpChannel implements Closeable, AutoCloseable {
 
     public int getTimeToLive() throws IOException {
         return channel.getOption(StandardSocketOptions.IP_MULTICAST_TTL);
+    }
+
+    public NetworkInterface getNetworkInterface() throws IOException {
+        return (NetworkInterface) channel.getOption(StandardSocketOptions.IP_MULTICAST_IF);
+    }
+
+    public UdpChannel setNetworkInterface(NetworkInterface intf) throws IOException {
+        channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, intf);
+        return this;
     }
 
     public boolean isConnected() {
@@ -435,8 +452,8 @@ public final class UdpChannel implements Closeable, AutoCloseable {
                     addressType(remoteSocket.getAddress()), getRemote(), getChannel().getLocalAddress()));
             sb.append("Options:\r\n");
             sb.append(String.format("SO_SNDBUF: %d SO_RCVBUF: %d SO_REUSEADDR: %b SO_BROADCAST: %b\n\r",
-                    channel.getOption(StandardSocketOptions.SO_SNDBUF),
-                    channel.getOption(StandardSocketOptions.SO_RCVBUF),
+                    getSendBufferSize(),
+                    getReceiveBufferSize(),
                     getReuseAddress(),
                     getBroadcast()));
             NetworkInterface intf = getNetworkInterface();
@@ -444,7 +461,7 @@ public final class UdpChannel implements Closeable, AutoCloseable {
                     channel.getOption(StandardSocketOptions.IP_TOS),
                     intf != null ? intf.getDisplayName() : "null",
                     getTimeToLive(),
-                    getMulticastLoop()));
+                    getLoopback()));
         } catch (IOException e) {
             sb.append(e.getClass().getName());
         }
