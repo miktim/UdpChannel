@@ -142,4 +142,8 @@ Helpful Links:
       https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml  
       https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml  
       https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml  
-  
+
+  - Android Multicast Troubleshooting:
+      https://stackoverflow.com/questions/13221736/android-device-not-receiving-multicast-package
+      https://stackoverflow.com/questions/27917605/android-multicastsocket-joingroup-doesnt-trigger-sending-igmp-message
+
